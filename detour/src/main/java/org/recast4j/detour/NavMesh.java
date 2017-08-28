@@ -46,14 +46,14 @@ public class NavMesh {
 
 	/// A flag that indicates that an entity links to an external entity.
 	/// (E.g. A polygon edge is a portal that links to another polygon.)
-	static int DT_EXT_LINK = 0x8000;
+	public static int DT_EXT_LINK = 0x8000;
 
 	/// A value that indicates the entity does not link to anything.
 	static int DT_NULL_LINK = 0xffffffff;
 
 	/// A flag that indicates that an off-mesh connection can be traversed in
 	/// both directions. (Is bidirectional.)
-	static int DT_OFFMESH_CON_BIDIR = 1;
+	public static int DT_OFFMESH_CON_BIDIR = 1;
 
 	/// The maximum number of user defined area ids.
 	static int DT_MAX_AREAS = 64;
@@ -239,7 +239,7 @@ public class NavMesh {
 		int ip = saltitip[2];
 		if (it >= m_maxTiles)
 			return false;
-		if (m_tiles[it].salt != salt || m_tiles[it].data.header == null)
+		if (m_tiles[it].salt != salt || m_tiles[it].data == null)
 			return false;
 		if (ip >= m_tiles[it].data.header.polyCount)
 			return false;
@@ -911,13 +911,12 @@ public class NavMesh {
 			float[] nearestPt = nearestPoly.getNearestPos();
 			// findNearestPoly may return too optimistic results, further check
 			// to make sure.
-			float dx = nearestPt[0] - p[0];
-			float dz = nearestPt[2] - p[2];
-			float dr = con.rad;
-			if (dx * dx + dz * dz > dr * dr)
+			if (sqr(nearestPt[0] - p[0]) + sqr(nearestPt[2] - p[2]) > sqr(con.rad))
 				continue;
 			// Make sure the location is on current mesh.
-			System.arraycopy(nearestPoly, 0, tile.data.verts, poly.verts[0] * 3, 3);
+			tile.data.verts[poly.verts[0] * 3] = nearestPt[0];
+			tile.data.verts[poly.verts[0] * 3 + 1] = nearestPt[1];
+			tile.data.verts[poly.verts[0] * 3 + 2] = nearestPt[2];
 
 			// Link off-mesh connection to target poly.
 			int idx = allocLink(tile);

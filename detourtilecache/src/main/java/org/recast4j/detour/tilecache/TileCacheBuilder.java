@@ -598,7 +598,7 @@ public class TileCacheBuilder {
 			shouldRemove = true;
 		}
 
-		return new Tupple2<Integer, Boolean>(height, shouldRemove);
+		return new Tupple2<>(height, shouldRemove);
 	}
 
 	// TODO: move this somewhere else, once the layer meshing is done.
@@ -834,11 +834,10 @@ public class TileCacheBuilder {
 					int xmin = cont.verts[va];
 					int xmax = cont.verts[vb];
 					if (xmin > xmax) {
-
+						int tmp = xmin;
+						xmin = xmax;
+						xmax = tmp;
 					}
-					int tmp = xmin;
-					xmin = xmax;
-					xmax = tmp;
 					for (int m = 0; m < edgeCount; ++m) {
 						Edge e = edges[m];
 						// Skip connected edges.
@@ -850,7 +849,7 @@ public class TileCacheBuilder {
 							int exmin = verts[eva];
 							int exmax = verts[evb];
 							if (exmin > exmax) {
-								tmp = exmin;
+								int tmp = exmin;
 								exmin = exmax;
 								exmax = tmp;
 							}
@@ -1159,7 +1158,7 @@ public class TileCacheBuilder {
 		int nb = countPolyVerts(polys, pb, maxVertsPerPoly);
 
 		// Merge polygons.
-		Arrays.fill(tmp, 0xFFFF);
+		Arrays.fill(tmp, DT_TILECACHE_NULL_IDX);
 		int n = 0;
 		// Add pa
 		for (int i = 0; i < na - 1; ++i)
@@ -1308,7 +1307,7 @@ public class TileCacheBuilder {
 				// Remove the polygon.
 				int p2 = (mesh.npolys - 1) * maxVertsPerPoly * 2;
 				System.arraycopy(mesh.polys, p2, mesh.polys, p, maxVertsPerPoly);
-				Arrays.fill(mesh.polys, p + maxVertsPerPoly, p + 2 * maxVertsPerPoly, 0xFFFF);
+				Arrays.fill(mesh.polys, p + maxVertsPerPoly, p + 2 * maxVertsPerPoly, DT_TILECACHE_NULL_IDX);
 				mesh.areas[i] = mesh.areas[mesh.npolys - 1];
 				mesh.npolys--;
 				--i;
@@ -1406,7 +1405,7 @@ public class TileCacheBuilder {
 
 		// Build initial polygons.
 		int npolys = 0;
-		Arrays.fill(polys, 0, ntris * maxVertsPerPoly, 0xFFFF);
+		Arrays.fill(polys, 0, ntris * maxVertsPerPoly, DT_TILECACHE_NULL_IDX);
 		for (int j = 0; j < ntris; ++j) {
 			int t = j * 3;
 			if (tris[t] != tris[t + 1] && tris[t] != tris[t + 2] && tris[t + 1] != tris[t + 2]) {
@@ -1465,7 +1464,7 @@ public class TileCacheBuilder {
 			if (mesh.npolys >= maxTris)
 				break;
 			int p = mesh.npolys * maxVertsPerPoly * 2;
-			Arrays.fill(mesh.polys, p, p + maxVertsPerPoly * 2, 0xFFFF);
+			Arrays.fill(mesh.polys, p, p + maxVertsPerPoly * 2, DT_TILECACHE_NULL_IDX);
 			for (int j = 0; j < maxVertsPerPoly; ++j)
 				mesh.polys[p + j] = polys[i * maxVertsPerPoly + j];
 			mesh.areas[mesh.npolys] = pareas[i];
@@ -1507,6 +1506,8 @@ public class TileCacheBuilder {
 		mesh.nverts = 0;
 		mesh.npolys = 0;
 
+		Arrays.fill(mesh.polys, DT_TILECACHE_NULL_IDX);
+
 		int[] firstVert = new int[VERTEX_BUCKET_COUNT2];
 		for (int i = 0; i < VERTEX_BUCKET_COUNT2; ++i)
 			firstVert[i] = DT_TILECACHE_NULL_IDX;
@@ -1547,7 +1548,7 @@ public class TileCacheBuilder {
 
 			// Build initial polygons.
 			int npolys = 0;
-			Arrays.fill(polys, 0xFFFF);
+			Arrays.fill(polys, DT_TILECACHE_NULL_IDX);
 			for (int j = 0; j < ntris; ++j) {
 				int t = j * 3;
 				if (tris[t] != tris[t + 1] && tris[t] != tris[t + 2] && tris[t + 1] != tris[t + 2]) {
@@ -1796,6 +1797,63 @@ public class TileCacheBuilder {
 			layer.cons[i] = (short) (grids[i + gridSize * 2] & 0xFF);
 		}
 		return layer;
+
+	}
+
+	public void markBoxArea(TileCacheLayer layer, float[] orig, float cs, float ch, float[] center, float[] extents,
+			float[] rotAux, int areaId) {
+		int w = layer.header.width;
+		int h = layer.header.height;
+		float ics = 1.0f / cs;
+		float ich = 1.0f / ch;
+
+		float cx = (center[0] - orig[0]) * ics;
+		float cz = (center[2] - orig[2]) * ics;
+
+		float maxr = 1.41f * Math.max(extents[0], extents[2]);
+		int minx = (int) Math.floor(cx - maxr * ics);
+		int maxx = (int) Math.floor(cx + maxr * ics);
+		int minz = (int) Math.floor(cz - maxr * ics);
+		int maxz = (int) Math.floor(cz + maxr * ics);
+		int miny = (int) Math.floor((center[1] - extents[1] - orig[1]) * ich);
+		int maxy = (int) Math.floor((center[1] + extents[1] - orig[1]) * ich);
+		
+		if (maxx < 0)
+			return;
+		if (minx >= w)
+			return;
+		if (maxz < 0)
+			return;
+		if (minz >= h)
+			return;
+
+		if (minx < 0)
+			minx = 0;
+		if (maxx >= w)
+			maxx = w - 1;
+		if (minz < 0)
+			minz = 0;
+		if (maxz >= h)
+			maxz = h - 1;
+
+		float xhalf = extents[0] * ics + 0.5f;
+		float zhalf = extents[2] * ics + 0.5f;
+		for (int z = minz; z <= maxz; ++z) {
+			for (int x = minx; x <= maxx; ++x) {
+				float x2 = 2.0f * (x - cx);
+				float z2 = 2.0f * (z - cz);
+				float xrot = rotAux[1] * x2 + rotAux[0] * z2;
+				if (xrot > xhalf || xrot < -xhalf)
+					continue;
+				float zrot = rotAux[1] * z2 - rotAux[0] * x2;
+				if (zrot > zhalf || zrot < -zhalf)
+					continue;
+				int y = layer.heights[x + z * w];
+				if (y < miny || y > maxy)
+					continue;
+				layer.areas[x + z * w] = (short) areaId;
+			}
+		}
 
 	}
 

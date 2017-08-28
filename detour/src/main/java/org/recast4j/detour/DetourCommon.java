@@ -108,13 +108,13 @@ public class DetourCommon {
 		out[2] = in[i + 2];
 	}
 
-	static void vMin(float[] out, float[] in, int i) {
+	public static void vMin(float[] out, float[] in, int i) {
 		out[0] = Math.min(out[0], in[i]);
 		out[1] = Math.min(out[1], in[i + 1]);
 		out[2] = Math.min(out[2], in[i + 2]);
 	}
 
-	static void vMax(float[] out, float[] in, int i) {
+	public static void vMax(float[] out, float[] in, int i) {
 		out[0] = Math.max(out[0], in[i]);
 		out[1] = Math.max(out[1], in[i + 1]);
 		out[2] = Math.max(out[2], in[i + 2]);
@@ -441,8 +441,8 @@ public class DetourCommon {
 		// Find sub triangle weighted by area.
 		float thr = s * areasum;
 		float acc = 0.0f;
-		float u = 0.0f;
-		int tri = 0;
+		float u = 1.0f;
+		int tri = npts - 1;
 		for (int i = 2; i < npts; i++) {
 			float dacc = areas[i];
 			if (thr >= acc && thr < (acc + dacc)) {

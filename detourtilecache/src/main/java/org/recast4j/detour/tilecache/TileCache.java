@@ -31,7 +31,7 @@ import java.util.List;
 import org.recast4j.detour.MeshData;
 import org.recast4j.detour.NavMesh;
 import org.recast4j.detour.NavMeshBuilder;
-import org.recast4j.detour.NavMeshCreateParams;
+import org.recast4j.detour.NavMeshDataCreateParams;
 import org.recast4j.detour.tilecache.TileCacheObstacle.TileCacheObstacleType;
 import org.recast4j.detour.tilecache.io.TileCacheLayerHeaderReader;
 
@@ -44,8 +44,8 @@ public class TileCache {
 	private CompressedTile m_nextFreeTile; /// < Freelist of tiles.
 	private final CompressedTile[] m_tiles; /// < List of tiles. // TODO: (PP) replace with list
 
-	private int m_saltBits; /// < Number of salt bits in the tile ID.
-	private int m_tileBits; /// < Number of tile bits in the tile ID.
+	private final int m_saltBits; /// < Number of salt bits in the tile ID.
+	private final int m_tileBits; /// < Number of tile bits in the tile ID.
 
 	private final NavMesh m_navmesh;
 	private final TileCacheParams m_params;
@@ -129,15 +129,18 @@ public class TileCache {
 	}
 
 	public CompressedTile getTileByRef(long ref) {
-		if (ref == 0)
-			return null;
+		if (ref == 0) {
+            return null;
+        }
 		int tileIndex = decodeTileIdTile(ref);
 		int tileSalt = decodeTileIdSalt(ref);
-		if (tileIndex >= m_params.maxTiles)
-			return null;
+		if (tileIndex >= m_params.maxTiles) {
+            return null;
+        }
 		CompressedTile tile = m_tiles[tileIndex];
-		if (tile.salt != tileSalt)
-			return null;
+		if (tile.salt != tileSalt) {
+            return null;
+        }
 		return tile;
 	}
 
@@ -171,29 +174,34 @@ public class TileCache {
 	}
 
 	public long getTileRef(CompressedTile tile) {
-		if (tile == null)
-			return 0;
+		if (tile == null) {
+            return 0;
+        }
 		int it = tile.index;
 		return encodeTileId(tile.salt, it);
 	}
 
 	public long getObstacleRef(TileCacheObstacle ob) {
-		if (ob == null)
-			return 0;
+		if (ob == null) {
+            return 0;
+        }
 		int idx = ob.index;
 		return encodeObstacleId(ob.salt, idx);
 	}
 
 	public TileCacheObstacle getObstacleByRef(long ref) {
-		if (ref == 0)
-			return null;
+		if (ref == 0) {
+            return null;
+        }
 		int idx = decodeObstacleIdObstacle(ref);
-		if (idx >= m_obstacles.size())
-			return null;
+		if (idx >= m_obstacles.size()) {
+            return null;
+        }
 		TileCacheObstacle ob = m_obstacles.get(idx);
 		int salt = decodeObstacleIdSalt(ref);
-		if (ob.salt != salt)
-			return null;
+		if (ob.salt != salt) {
+            return null;
+        }
 		return ob;
 	}
 
@@ -215,8 +223,9 @@ public class TileCache {
 		}
 
 		// Make sure we could allocate a tile.
-		if (tile == null)
-			throw new RuntimeException("Out of storage");
+		if (tile == null) {
+            throw new RuntimeException("Out of storage");
+        }
 
 		// Insert tile into the position lut.
 		int h = NavMesh.computeTileHash(header.tx, header.ty, m_tileLutMask);
@@ -237,15 +246,18 @@ public class TileCache {
 	}
 
 	public void removeTile(long ref) {
-		if (ref == 0)
-			throw new RuntimeException("Invalid tile ref");
+		if (ref == 0) {
+            throw new RuntimeException("Invalid tile ref");
+        }
 		int tileIndex = decodeTileIdTile(ref);
 		int tileSalt = decodeTileIdSalt(ref);
-		if (tileIndex >= m_params.maxTiles)
-			throw new RuntimeException("Invalid tile index");
+		if (tileIndex >= m_params.maxTiles) {
+            throw new RuntimeException("Invalid tile index");
+        }
 		CompressedTile tile = m_tiles[tileIndex];
-		if (tile.salt != tileSalt)
-			throw new RuntimeException("Invalid tile salt");
+		if (tile.salt != tileSalt) {
+            throw new RuntimeException("Invalid tile salt");
+        }
 
 		// Remove tile from hash lookup.
 		int h = NavMesh.computeTileHash(tile.header.tx, tile.header.ty, m_tileLutMask);
@@ -253,10 +265,11 @@ public class TileCache {
 		CompressedTile cur = m_posLookup[h];
 		while (cur != null) {
 			if (cur == tile) {
-				if (prev != null)
-					prev.next = cur.next;
-				else
-					m_posLookup[h] = cur.next;
+				if (prev != null) {
+                    prev.next = cur.next;
+                } else {
+                    m_posLookup[h] = cur.next;
+                }
 				break;
 			}
 			prev = cur;
@@ -270,8 +283,9 @@ public class TileCache {
 
 		// Update salt, salt should never be zero.
 		tile.salt = (tile.salt + 1) & ((1 << m_saltBits) - 1);
-		if (tile.salt == 0)
-			tile.salt++;
+		if (tile.salt == 0) {
+            tile.salt++;
+        }
 
 		// Add to free list.
 		tile.next = m_nextFreeTile;
@@ -279,6 +293,7 @@ public class TileCache {
 
 	}
 
+	// Cylinder obstacle
 	public long addObstacle(float[] pos, float radius, float height) {
 		TileCacheObstacle ob = allocObstacle();
 		ob.type = TileCacheObstacleType.CYLINDER;
@@ -287,14 +302,10 @@ public class TileCache {
 		ob.radius = radius;
 		ob.height = height;
 
-		ObstacleRequest req = new ObstacleRequest();
-		req.action = ObstacleRequestAction.REQUEST_ADD;
-		req.ref = getObstacleRef(ob);
-		m_reqs.add(req);
-
-		return req.ref;
+		return addObstacleRequest(ob).ref;
 	}
 
+	// Aabb obstacle
 	public long addBoxObstacle(float[] bmin, float[] bmax) {
 		TileCacheObstacle ob = allocObstacle();
 		ob.type = TileCacheObstacleType.BOX;
@@ -302,17 +313,34 @@ public class TileCache {
 		vCopy(ob.bmin, bmin);
 		vCopy(ob.bmax, bmax);
 
+		return addObstacleRequest(ob).ref;
+	}
+
+	// Box obstacle: can be rotated in Y
+	public long addBoxObstacle(float[] center, float[] extents, float yRadians) {
+		TileCacheObstacle ob = allocObstacle();
+		ob.type = TileCacheObstacleType.ORIENTED_BOX;
+		vCopy(ob.center, center);
+		vCopy(ob.extents, extents);
+		float coshalf = (float) Math.cos(0.5f * yRadians);
+		float sinhalf = (float) Math.sin(-0.5f * yRadians);
+		ob.rotAux[0] = coshalf * sinhalf;
+		ob.rotAux[1] = coshalf * coshalf - 0.5f;
+		return addObstacleRequest(ob).ref;
+	}
+	
+	private ObstacleRequest addObstacleRequest(TileCacheObstacle ob) {
 		ObstacleRequest req = new ObstacleRequest();
 		req.action = ObstacleRequestAction.REQUEST_ADD;
 		req.ref = getObstacleRef(ob);
 		m_reqs.add(req);
-
-		return req.ref;
+		return req;
 	}
 
 	void removeObstacle(long ref) {
-		if (ref == 0)
-			return;
+		if (ref == 0) {
+            return;
+        }
 
 		ObstacleRequest req = new ObstacleRequest();
 		req.action = ObstacleRequestAction.REQUEST_REMOVE;
@@ -362,7 +390,7 @@ public class TileCache {
 
 	/**
 	 * Updates the tile cache by rebuilding tiles touched by unfinished obstacle requests.
-	 * 
+	 *
 	 * @return Returns true if the tile cache is fully up to date with obstacle requests and tile rebuilds. If the tile
 	 *         cache is up to date another (immediate) call to update will have no effect; otherwise another call will
 	 *         continue processing obstacle requests and tile rebuilds.
@@ -372,12 +400,14 @@ public class TileCache {
 			// Process requests.
 			for (ObstacleRequest req : m_reqs) {
 				int idx = decodeObstacleIdObstacle(req.ref);
-				if (idx >= m_obstacles.size())
-					continue;
+				if (idx >= m_obstacles.size()) {
+                    continue;
+                }
 				TileCacheObstacle ob = m_obstacles.get(idx);
 				int salt = decodeObstacleIdSalt(req.ref);
-				if (ob.salt != salt)
-					continue;
+				if (ob.salt != salt) {
+                    continue;
+                }
 
 				if (req.action == ObstacleRequestAction.REQUEST_ADD) {
 					// Find touched tiles.
@@ -432,8 +462,9 @@ public class TileCache {
 							ob.state = ObstacleState.DT_OBSTACLE_EMPTY;
 							// Update salt, salt should never be zero.
 							ob.salt = (ob.salt + 1) & ((1 << 16) - 1);
-							if (ob.salt == 0)
-								ob.salt++;
+							if (ob.salt == 0) {
+                                ob.salt++;
+                            }
 							// Return obstacle to free list.
 							ob.next = m_nextFreeObstacle;
 							m_nextFreeObstacle = ob;
@@ -448,12 +479,14 @@ public class TileCache {
 
 	public void buildNavMeshTile(long ref) {
 		int idx = decodeTileIdTile(ref);
-		if (idx > m_params.maxTiles)
-			throw new RuntimeException("Invalid tile index");
+		if (idx > m_params.maxTiles) {
+            throw new RuntimeException("Invalid tile index");
+        }
 		CompressedTile tile = m_tiles[idx];
 		int salt = decodeTileIdSalt(ref);
-		if (tile.salt != salt)
-			throw new RuntimeException("Invalid tile salt");
+		if (tile.salt != salt) {
+            throw new RuntimeException("Invalid tile salt");
+        }
 		int walkableClimbVx = (int) (m_params.walkableClimb / m_params.ch);
 
 		// Decompress tile layer data.
@@ -462,14 +495,18 @@ public class TileCache {
 		// Rasterize obstacles.
 		for (int i = 0; i < m_obstacles.size(); ++i) {
 			TileCacheObstacle ob = m_obstacles.get(i);
-			if (ob.state == ObstacleState.DT_OBSTACLE_EMPTY || ob.state == ObstacleState.DT_OBSTACLE_REMOVING)
-				continue;
+			if (ob.state == ObstacleState.DT_OBSTACLE_EMPTY || ob.state == ObstacleState.DT_OBSTACLE_REMOVING) {
+                continue;
+            }
 			if (contains(ob.touched, ref)) {
 				if (ob.type == TileCacheObstacleType.CYLINDER) {
 					builder.markCylinderArea(layer, tile.header.bmin, m_params.cs, m_params.ch, ob.pos, ob.radius,
 							ob.height, 0);
-				} else {
+				} else if (ob.type == TileCacheObstacleType.BOX) {
 					builder.markBoxArea(layer, tile.header.bmin, m_params.cs, m_params.ch, ob.bmin, ob.bmax, 0);
+				} else if (ob.type == TileCacheObstacleType.ORIENTED_BOX) {
+					builder.markBoxArea(layer, tile.header.bmin, m_params.cs, m_params.ch, ob.center, ob.extents,
+							ob.rotAux, 0);
 				}
 			}
 		}
@@ -483,7 +520,7 @@ public class TileCache {
 			m_navmesh.removeTile(m_navmesh.getTileRefAt(tile.header.tx, tile.header.ty, tile.header.tlayer));
 			return;
 		}
-		NavMeshCreateParams params = new NavMeshCreateParams();
+		NavMeshDataCreateParams params = new NavMeshDataCreateParams();
 		params.verts = polyMesh.verts;
 		params.vertCount = polyMesh.nverts;
 		params.polys = polyMesh.polys;
@@ -503,7 +540,7 @@ public class TileCache {
 		params.bmin = tile.header.bmin;
 		params.bmax = tile.header.bmax;
 		if (m_tmproc != null) {
-			m_tmproc.process(params, polyMesh.areas, polyMesh.flags);
+			m_tmproc.process(params);
 		}
 		MeshData meshData = NavMeshBuilder.createNavMeshData(params);
 		// Remove existing tile.
@@ -538,9 +575,17 @@ public class TileCache {
 			bmax[0] = ob.pos[0] + ob.radius;
 			bmax[1] = ob.pos[1] + ob.height;
 			bmax[2] = ob.pos[2] + ob.radius;
-		} else {
+		} else if (ob.type == TileCacheObstacleType.BOX) {
 			vCopy(bmin, ob.bmin);
 			vCopy(bmax, ob.bmax);
+		} else if (ob.type == TileCacheObstacleType.ORIENTED_BOX) {
+			float maxr = 1.41f * Math.max(ob.extents[0], ob.extents[2]);
+			bmin[0] = ob.center[0] - maxr;
+			bmax[0] = ob.center[0] + maxr;
+			bmin[1] = ob.center[1] - ob.extents[1];
+			bmax[1] = ob.center[1] + ob.extents[1];
+			bmin[2] = ob.center[2] - maxr;
+			bmax[2] = ob.center[2] + maxr;
 		}
 	}
 
